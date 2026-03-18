@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+package metratron.pipeline.v1;
+
+// ─── Pipeline Definition ─────────────────────────────────────────────────────
+
+message PipelineNode {
+  string id = 1;
+  string node_type = 2;          // "start", "httpRequest", "ifElse", "llmPrompt", etc.
+  string label = 3;
+  double position_x = 4;
+  double position_y = 5;
+  string data_json = 6;          // JSON-encoded node-specific config
+}
+
+message PipelineEdge {
+  string id = 1;
+  string source = 2;
+  string target = 3;
+  string label = 4;
+}
+
+message PipelineDefinition {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string version = 4;
+  repeated PipelineNode nodes = 5;
+  repeated PipelineEdge edges = 6;
+  string variables_json = 7;     // JSON-encoded flow variables
+  string settings_json = 8;     // JSON-encoded runtime settings
+}
+
+// ─── Execution ───────────────────────────────────────────────────────────────
+
+enum RunStatus {
+  RUN_STATUS_UNSPECIFIED = 0;
+  RUN_STATUS_QUEUED = 1;
+  RUN_STATUS_RUNNING = 2;
+  RUN_STATUS_COMPLETED = 3;
+  RUN_STATUS_FAILED = 4;
+  RUN_STATUS_CANCELLED = 5;
+}
+
+enum NodeStatus {
+  NODE_STATUS_UNSPECIFIED = 0;
+  NODE_STATUS_PENDING = 1;
+  NODE_STATUS_RUNNING = 2;
+  NODE_STATUS_SUCCESS = 3;
+  NODE_STATUS_ERROR = 4;
+  NODE_STATUS_SKIPPED = 5;
+}
+
+message NodeEvent {
+  string node_id = 1;
+  NodeStatus status = 2;
+  string message = 3;
+  string output_json = 4;       // JSON-encoded output data
+  double duration_ms = 5;
+  string timestamp = 6;
+}
+
+message PipelineEvent {
+  string run_id = 1;
+  RunStatus run_status = 2;
+  NodeEvent node_event = 3;     // set when a specific node changes status
+  string message = 4;
+  string timestamp = 5;
+}
+
+// ─── Requests / Responses ────────────────────────────────────────────────────
+
+message RunPipelineRequest {
+  string pipeline_id = 1;
+  string runner_type = 2;       // "local" | "argo" | "jenkins" | "github-actions"
+  string variables_json = 3;    // JSON override for flow variables
+  string triggered_by = 4;      // user ID or "webhook" or "schedule"
+}
+
+message RunPipelineResponse {
+  string run_id = 1;
+  RunStatus status = 2;
+  string message = 3;
+}
+
+message GetPipelineStatusRequest {
+  string run_id = 1;
+}
+
+message PipelineRunSummary {
+  string run_id = 1;
+  string pipeline_id = 2;
+  string pipeline_name = 3;
+  RunStatus status = 4;
+  string runner_type = 5;
+  string triggered_by = 6;
+  string started_at = 7;
+  string finished_at = 8;
+  double total_duration_ms = 9;
+  int32 nodes_total = 10;
+  int32 nodes_completed = 11;
+  int32 nodes_failed = 12;
+}
+
+message GetPipelineStatusResponse {
+  PipelineRunSummary summary = 1;
+  repeated NodeEvent node_events = 2;
+}
+
+message CancelPipelineRequest {
+  string run_id = 1;
+  string reason = 2;
+}
+
+message CancelPipelineResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// ─── Service ─────────────────────────────────────────────────────────────────
+
+service PipelineService {
+  // Run a pipeline — returns initial status, then stream events
+  rpc RunPipeline(RunPipelineRequest) returns (RunPipelineResponse);
+
+  // Stream real-time execution events for a running pipeline
+  rpc StreamPipelineEvents(GetPipelineStatusRequest) returns (stream PipelineEvent);
+
+  // Get current status of a pipeline run
+  rpc GetPipelineStatus(GetPipelineStatusRequest) returns (GetPipelineStatusResponse);
+
+  // Cancel a running pipeline
+  rpc CancelPipeline(CancelPipelineRequest) returns (CancelPipelineResponse);
+}

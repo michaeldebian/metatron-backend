@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package metratron.auth.v1;
+
+// ─── Permission Types ────────────────────────────────────────────────────────
+
+message Permission {
+  string module = 1;   // e.g. "dashboard", "pipeline", "finops", "clusters"
+  string action = 2;   // e.g. "view", "create", "edit", "delete", "execute", "admin"
+}
+
+message PermissionSet {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  bool is_system = 4;
+  repeated Permission grants = 5;
+}
+
+// ─── Team / User ─────────────────────────────────────────────────────────────
+
+message TeamMembership {
+  string team_id = 1;
+  string team_name = 2;
+  string role = 3;       // "admin" | "editor" | "viewer"
+}
+
+message UserInfo {
+  string user_id = 1;
+  string org_id = 2;
+  string email = 3;
+  string name = 4;
+  string avatar_url = 5;
+  bool is_org_owner = 6;
+  repeated TeamMembership teams = 7;
+  repeated Permission effective_permissions = 8;
+}
+
+// ─── Token Validation ────────────────────────────────────────────────────────
+
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  UserInfo user = 2;
+  string error = 3;
+}
+
+// ─── Permission Check ────────────────────────────────────────────────────────
+
+message CheckPermissionRequest {
+  string user_id = 1;
+  string module = 2;
+  string action = 3;
+}
+
+message CheckPermissionResponse {
+  bool allowed = 1;
+}
+
+// ─── Service ─────────────────────────────────────────────────────────────────
+
+service AuthService {
+  // Validate a JWT token and return user info with resolved permissions
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+
+  // Check if a user has a specific permission
+  rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse);
+}
